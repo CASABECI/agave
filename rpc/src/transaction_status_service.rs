@@ -206,6 +206,7 @@ pub(crate) mod tests {
         },
         solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path_auto_delete},
         solana_runtime::bank::{Bank, TransactionBalancesSet},
+        solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
         solana_sdk::{
             account_utils::StateMut,
             clock::Slot,
@@ -312,6 +313,7 @@ pub(crate) mod tests {
             SimpleAddressLoader::Disabled,
             &ReservedAccountKeys::empty_key_set(),
         )
+        .and_then(RuntimeTransaction::try_from_sanitized_transaction)
         .unwrap();
 
         let expected_transaction = transaction.clone();

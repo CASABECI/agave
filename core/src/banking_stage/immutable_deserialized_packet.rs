@@ -2,7 +2,10 @@ use {
     super::packet_filter::PacketFilterFailure,
     solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
     solana_perf::packet::Packet,
-    solana_runtime_transaction::instructions_processor::process_compute_budget_instructions,
+    solana_runtime_transaction::{
+        instructions_processor::process_compute_budget_instructions,
+        runtime_transaction::RuntimeTransaction,
+    },
     solana_sanitize::SanitizeError,
     solana_sdk::{
         hash::Hash,
@@ -116,7 +119,7 @@ impl ImmutableDeserializedPacket {
         votes_only: bool,
         address_loader: impl AddressLoader,
         reserved_account_keys: &HashSet<Pubkey>,
-    ) -> Option<SanitizedTransaction> {
+    ) -> Option<RuntimeTransaction<SanitizedTransaction>> {
         if votes_only && !self.is_simple_vote() {
             return None;
         }
@@ -127,6 +130,7 @@ impl ImmutableDeserializedPacket {
             address_loader,
             reserved_account_keys,
         )
+        .and_then(RuntimeTransaction::try_from_sanitized_transaction)
         .ok()?;
         Some(tx)
     }

@@ -22,7 +22,10 @@ use {
         bank::{Bank, LoadAndExecuteTransactionsOutput},
         transaction_batch::TransactionBatch,
     },
-    solana_runtime_transaction::instructions_processor::process_compute_budget_instructions,
+    solana_runtime_transaction::{
+        instructions_processor::process_compute_budget_instructions,
+        runtime_transaction::RuntimeTransaction,
+    },
     solana_sdk::{
         clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
         fee::FeeBudgetLimits,
@@ -40,6 +43,7 @@ use {
     solana_svm_transaction::svm_message::SVMMessage,
     solana_timings::ExecuteTimings,
     std::{
+        ops::Deref,
         sync::{atomic::Ordering, Arc},
         time::Instant,
     },
@@ -226,7 +230,7 @@ impl Consumer {
         &self,
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
-        sanitized_transactions: &[SanitizedTransaction],
+        sanitized_transactions: &[RuntimeTransaction<SanitizedTransaction>],
         banking_stage_stats: &BankingStageStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> ProcessTransactionsSummary {
@@ -282,7 +286,7 @@ impl Consumer {
         &self,
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
-        transactions: &[SanitizedTransaction],
+        transactions: &[RuntimeTransaction<SanitizedTransaction>],
     ) -> ProcessTransactionsSummary {
         let mut chunk_start = 0;
         let mut all_retryable_tx_indexes = vec![];
@@ -384,7 +388,7 @@ impl Consumer {
     pub fn process_and_record_transactions(
         &self,
         bank: &Arc<Bank>,
-        txs: &[SanitizedTransaction],
+        txs: &[RuntimeTransaction<SanitizedTransaction>],
         chunk_offset: usize,
     ) -> ProcessTransactionBatchOutput {
         let mut error_counters = TransactionErrorMetrics::default();
@@ -427,7 +431,7 @@ impl Consumer {
     pub fn process_and_record_aged_transactions(
         &self,
         bank: &Arc<Bank>,
-        txs: &[SanitizedTransaction],
+        txs: &[RuntimeTransaction<SanitizedTransaction>],
         max_slot_ages: &[Slot],
     ) -> ProcessTransactionBatchOutput {
         let move_precompile_verification_to_svm = bank
@@ -445,7 +449,7 @@ impl Consumer {
                 // but whether it will pass sanitization needs to be checked.
                 let resanitized_tx =
                     bank.fully_verify_transaction(tx.to_versioned_transaction())?;
-                if resanitized_tx != *tx {
+                if &resanitized_tx != tx.deref() {
                     // Sanitization before/after epoch give different transaction data - do not execute.
                     return Err(TransactionError::ResanitizationNeeded);
                 }
@@ -470,7 +474,7 @@ impl Consumer {
     fn process_and_record_transactions_with_pre_results(
         &self,
         bank: &Arc<Bank>,
-        txs: &[SanitizedTransaction],
+        txs: &[RuntimeTransaction<SanitizedTransaction>],
         chunk_offset: usize,
         pre_results: impl Iterator<Item = Result<(), TransactionError>>,
     ) -> ProcessTransactionBatchOutput {
@@ -801,7 +805,7 @@ impl Consumer {
     /// * `pending_indexes` - identifies which indexes in the `transactions` list are still pending
     fn filter_pending_packets_from_pending_txs(
         bank: &Bank,
-        transactions: &[SanitizedTransaction],
+        transactions: &[RuntimeTransaction<SanitizedTransaction>],
         pending_indexes: &[usize],
     ) -> Vec<usize> {
         let filter =
@@ -2064,6 +2068,7 @@ mod tests {
             bank.as_ref(),
             &ReservedAccountKeys::empty_key_set(),
         )
+        .and_then(RuntimeTransaction::try_from_sanitized_transaction)
         .unwrap();
 
         let entry = next_versioned_entry(&genesis_config.hash(), 1, vec![tx]);

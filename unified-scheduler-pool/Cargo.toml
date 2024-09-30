@@ -19,6 +19,7 @@ qualifier_attr = { workspace = true }
 scopeguard = { workspace = true }
 solana-ledger = { workspace = true }
 solana-runtime = { workspace = true }
+solana-runtime-transaction = { workspace = true }
 solana-sdk = { workspace = true }
 solana-timings = { workspace = true }
 solana-unified-scheduler-logic = { workspace = true }
@@ -30,6 +31,9 @@ assert_matches = { workspace = true }
 lazy_static = { workspace = true }
 solana-logger = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+solana-runtime-transaction = { workspace = true, features = [
+    "dev-context-only-utils",
+] }
 
 [features]
 dev-context-only-utils = []

@@ -60,6 +60,7 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_utils,
     },
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::{Slot, UnixTimestamp, MAX_PROCESSING_AGE},
@@ -2249,7 +2250,7 @@ fn optimize_filters(filters: &mut [RpcFilterType]) {
 }
 
 fn verify_transaction(
-    transaction: &SanitizedTransaction,
+    transaction: &RuntimeTransaction<SanitizedTransaction>,
     feature_set: &Arc<feature_set::FeatureSet>,
 ) -> Result<()> {
     #[allow(clippy::question_mark)]
@@ -4210,7 +4211,7 @@ fn sanitize_transaction(
     transaction: VersionedTransaction,
     address_loader: impl AddressLoader,
     reserved_account_keys: &HashSet<Pubkey>,
-) -> Result<SanitizedTransaction> {
+) -> Result<RuntimeTransaction<SanitizedTransaction>> {
     SanitizedTransaction::try_create(
         transaction,
         MessageHash::Compute,
@@ -4218,6 +4219,7 @@ fn sanitize_transaction(
         address_loader,
         reserved_account_keys,
     )
+    .and_then(RuntimeTransaction::try_from_sanitized_transaction)
     .map_err(|err| Error::invalid_params(format!("invalid transaction: {err}")))
 }
 
@@ -4731,7 +4733,7 @@ pub mod tests {
             let prioritization_fee_cache = &self.meta.prioritization_fee_cache;
             let transactions: Vec<_> = transactions
                 .into_iter()
-                .map(SanitizedTransaction::from_transaction_for_tests)
+                .map(RuntimeTransaction::from_transaction_for_tests)
                 .collect();
             prioritization_fee_cache.update(&bank, transactions.iter());
         }

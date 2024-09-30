@@ -14,6 +14,7 @@ use {
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
     },
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         account::Account,
         clock::Slot,
@@ -183,7 +184,9 @@ fn simulate_transaction(
         Some(false), // is_simple_vote_tx
         bank,
         bank.get_reserved_account_keys(),
-    ) {
+    )
+    .and_then(RuntimeTransaction::try_from_sanitized_transaction)
+    {
         Err(err) => {
             return BanksTransactionResultWithSimulation {
                 result: Some(Err(err)),

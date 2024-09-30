@@ -102,7 +102,7 @@ use {
     },
     solana_runtime_transaction::{
         instructions_processor::process_compute_budget_instructions,
-        svm_transaction_adapter::SVMTransactionAdapter,
+        runtime_transaction::RuntimeTransaction, svm_transaction_adapter::SVMTransactionAdapter,
     },
     solana_sdk::{
         account::{
@@ -3171,7 +3171,7 @@ impl Bank {
 
     fn update_transaction_statuses(
         &self,
-        sanitized_txs: &[SanitizedTransaction],
+        sanitized_txs: &[RuntimeTransaction<SanitizedTransaction>],
         processing_results: &[TransactionProcessingResult],
     ) {
         let mut status_cache = self.status_cache.write().unwrap();
@@ -3340,6 +3340,7 @@ impl Bank {
                     self,
                     self.get_reserved_account_keys(),
                 )
+                .and_then(RuntimeTransaction::try_from_sanitized_transaction)
             })
             .collect::<Result<Vec<_>>>()?;
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
@@ -3357,7 +3358,7 @@ impl Bank {
     /// Prepare a locked transaction batch from a list of sanitized transactions.
     pub fn prepare_sanitized_batch<'a, 'b>(
         &'a self,
-        txs: &'b [SanitizedTransaction],
+        txs: &'b [RuntimeTransaction<SanitizedTransaction>],
     ) -> TransactionBatch<'a, 'b, SanitizedTransaction> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_results = self
@@ -3371,7 +3372,7 @@ impl Bank {
     /// limited packing status
     pub fn prepare_sanitized_batch_with_results<'a, 'b>(
         &'a self,
-        transactions: &'b [SanitizedTransaction],
+        transactions: &'b [RuntimeTransaction<SanitizedTransaction>],
         transaction_results: impl Iterator<Item = Result<()>>,
     ) -> TransactionBatch<'a, 'b, SanitizedTransaction> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
@@ -3387,7 +3388,7 @@ impl Bank {
     /// Prepare a transaction batch from a single transaction without locking accounts
     pub fn prepare_unlocked_batch_from_single_tx<'a>(
         &'a self,
-        transaction: &'a SanitizedTransaction,
+        transaction: &'a RuntimeTransaction<SanitizedTransaction>,
     ) -> TransactionBatch<'_, '_, SanitizedTransaction> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_result =
@@ -3404,7 +3405,7 @@ impl Bank {
     /// Run transactions against a frozen bank without committing the results
     pub fn simulate_transaction(
         &self,
-        transaction: &SanitizedTransaction,
+        transaction: &RuntimeTransaction<SanitizedTransaction>,
         enable_cpi_recording: bool,
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
@@ -3416,7 +3417,7 @@ impl Bank {
     /// is frozen, enabling use in single-Bank test frameworks
     pub fn simulate_transaction_unchecked(
         &self,
-        transaction: &SanitizedTransaction,
+        transaction: &RuntimeTransaction<SanitizedTransaction>,
         enable_cpi_recording: bool,
     ) -> TransactionSimulationResult {
         let account_keys = transaction.message().account_keys();
@@ -3664,7 +3665,7 @@ impl Bank {
 
     fn collect_logs(
         &self,
-        transactions: &[SanitizedTransaction],
+        transactions: &[RuntimeTransaction<SanitizedTransaction>],
         processing_results: &[TransactionProcessingResult],
     ) {
         let transaction_log_collector_config =
@@ -3862,7 +3863,7 @@ impl Bank {
 
     pub fn commit_transactions(
         &self,
-        sanitized_txs: &[SanitizedTransaction],
+        sanitized_txs: &[RuntimeTransaction<SanitizedTransaction>],
         processing_results: Vec<TransactionProcessingResult>,
         processed_counts: &ProcessedTransactionCounts,
         timings: &mut ExecuteTimings,
@@ -6021,7 +6022,7 @@ impl Bank {
     /// a bank-level cache of vote accounts and stake delegation info
     fn update_stakes_cache(
         &self,
-        txs: &[SanitizedTransaction],
+        txs: &[RuntimeTransaction<SanitizedTransaction>],
         processing_results: &[TransactionProcessingResult],
     ) {
         debug_assert_eq!(txs.len(), processing_results.len());
@@ -6839,7 +6840,7 @@ impl Bank {
         let transaction_account_lock_limit = self.get_transaction_account_lock_limit();
         let sanitized_txs = txs
             .into_iter()
-            .map(SanitizedTransaction::from_transaction_for_tests)
+            .map(RuntimeTransaction::from_transaction_for_tests)
             .collect::<Vec<_>>();
         let lock_results = self
             .rc

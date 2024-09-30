@@ -40,6 +40,7 @@ use {
         transaction_batch::{OwnedOrBorrowed, TransactionBatch},
         vote_sender_types::ReplayVoteSender,
     },
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
         genesis_config::GenesisConfig,
@@ -225,7 +226,7 @@ pub fn execute_batch(
 fn check_block_cost_limits(
     bank: &Bank,
     commit_results: &[TransactionCommitResult],
-    sanitized_transactions: &[SanitizedTransaction],
+    sanitized_transactions: &[RuntimeTransaction<SanitizedTransaction>],
 ) -> Result<()> {
     assert_eq!(sanitized_transactions.len(), commit_results.len());
 
@@ -435,7 +436,7 @@ fn schedule_batches_for_execution(
 fn rebatch_transactions<'a>(
     lock_results: &'a [Result<()>],
     bank: &'a Arc<Bank>,
-    sanitized_txs: &'a [SanitizedTransaction],
+    sanitized_txs: &'a [RuntimeTransaction<SanitizedTransaction>],
     start: usize,
     end: usize,
     transaction_indexes: &'a [usize],
@@ -554,8 +555,9 @@ pub fn process_entries_for_tests(
     let replay_tx_thread_pool = create_thread_pool(1);
     let verify_transaction = {
         let bank = bank.clone_with_scheduler();
-        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+        move |versioned_tx: VersionedTransaction| -> Result<RuntimeTransaction<SanitizedTransaction>> {
             bank.verify_transaction(versioned_tx, TransactionVerificationMode::FullVerification)
+                .and_then(RuntimeTransaction::try_from_sanitized_transaction)
         }
     };
 
@@ -1577,8 +1579,9 @@ fn confirm_slot_entries(
         let bank = bank.clone_with_scheduler();
         move |versioned_tx: VersionedTransaction,
               verification_mode: TransactionVerificationMode|
-              -> Result<SanitizedTransaction> {
+              -> Result<RuntimeTransaction<SanitizedTransaction>> {
             bank.verify_transaction(versioned_tx, verification_mode)
+                .and_then(RuntimeTransaction::try_from_sanitized_transaction)
         }
     };
 
@@ -2123,7 +2126,7 @@ pub enum TransactionStatusMessage {
 
 pub struct TransactionStatusBatch {
     pub slot: Slot,
-    pub transactions: Vec<SanitizedTransaction>,
+    pub transactions: Vec<RuntimeTransaction<SanitizedTransaction>>,
     pub commit_results: Vec<TransactionCommitResult>,
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
@@ -2139,7 +2142,7 @@ impl TransactionStatusSender {
     pub fn send_transaction_status_batch(
         &self,
         slot: Slot,
-        transactions: Vec<SanitizedTransaction>,
+        transactions: Vec<RuntimeTransaction<SanitizedTransaction>>,
         commit_results: Vec<TransactionCommitResult>,
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
@@ -4671,7 +4674,7 @@ pub mod tests {
     fn create_test_transactions(
         mint_keypair: &Keypair,
         genesis_hash: &Hash,
-    ) -> Vec<SanitizedTransaction> {
+    ) -> Vec<RuntimeTransaction<SanitizedTransaction>> {
         let pubkey = solana_sdk::pubkey::new_rand();
         let keypair2 = Keypair::new();
         let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -4679,19 +4682,19 @@ pub mod tests {
         let pubkey3 = solana_sdk::pubkey::new_rand();
 
         vec![
-            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            RuntimeTransaction::from_transaction_for_tests(system_transaction::transfer(
                 mint_keypair,
                 &pubkey,
                 1,
                 *genesis_hash,
             )),
-            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            RuntimeTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &keypair2,
                 &pubkey2,
                 1,
                 *genesis_hash,
             )),
-            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            RuntimeTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &keypair3,
                 &pubkey3,
                 1,
@@ -5079,7 +5082,7 @@ pub mod tests {
         } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
         let bank = Bank::new_for_tests(&genesis_config);
 
-        let tx = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+        let tx = RuntimeTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
             &Pubkey::new_unique(),
             1,

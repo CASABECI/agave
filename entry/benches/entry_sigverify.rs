@@ -3,6 +3,7 @@ extern crate test;
 use {
     solana_entry::entry::{self, VerifyRecyclers},
     solana_perf::test_tx::test_tx,
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         hash::Hash,
         reserved_account_keys::ReservedAccountKeys,
@@ -28,7 +29,7 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
     let verify_transaction = {
         move |versioned_tx: VersionedTransaction,
               verification_mode: TransactionVerificationMode|
-              -> Result<SanitizedTransaction> {
+              -> Result<RuntimeTransaction<SanitizedTransaction>> {
             let sanitized_tx = {
                 let message_hash =
                     if verification_mode == TransactionVerificationMode::FullVerification {
@@ -44,6 +45,7 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
                     SimpleAddressLoader::Disabled,
                     &ReservedAccountKeys::empty_key_set(),
                 )
+                .and_then(RuntimeTransaction::try_from_sanitized_transaction)
             }?;
 
             Ok(sanitized_tx)
@@ -78,7 +80,7 @@ fn bench_cpusigverify(bencher: &mut Bencher) {
         .collect::<Vec<_>>();
 
     let verify_transaction = {
-        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+        move |versioned_tx: VersionedTransaction| -> Result<RuntimeTransaction<SanitizedTransaction>> {
             let sanitized_tx = {
                 let message_hash = versioned_tx.verify_and_hash_message()?;
                 SanitizedTransaction::try_create(
@@ -87,7 +89,7 @@ fn bench_cpusigverify(bencher: &mut Bencher) {
                     None,
                     SimpleAddressLoader::Disabled,
                     &ReservedAccountKeys::empty_key_set(),
-                )
+                ).and_then(RuntimeTransaction::try_from_sanitized_transaction)
             }?;
 
             Ok(sanitized_tx)

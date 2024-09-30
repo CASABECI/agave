@@ -23,6 +23,7 @@
 use {
     crate::bank::Bank,
     log::*,
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         clock::Slot,
         hash::Hash,
@@ -167,7 +168,7 @@ pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     /// having &mut.
     fn schedule_execution<'a>(
         &'a self,
-        transaction_with_index: &'a (&'a SanitizedTransaction, usize),
+        transaction_with_index: &'a (&'a RuntimeTransaction<SanitizedTransaction>, usize),
     ) -> ScheduleResult;
 
     /// Return the error which caused the scheduler to abort.
@@ -447,7 +448,9 @@ impl BankWithScheduler {
     // 'a is needed; anonymous_lifetime_in_impl_trait isn't stabilized yet...
     pub fn schedule_transaction_executions<'a>(
         &self,
-        transactions_with_indexes: impl ExactSizeIterator<Item = (&'a SanitizedTransaction, &'a usize)>,
+        transactions_with_indexes: impl ExactSizeIterator<
+            Item = (&'a RuntimeTransaction<SanitizedTransaction>, &'a usize),
+        >,
     ) -> Result<()> {
         trace!(
             "schedule_transaction_executions(): {} txs",
@@ -841,7 +844,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let tx0 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+        let tx0 = RuntimeTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
             &solana_sdk::pubkey::new_rand(),
             2,

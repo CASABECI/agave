@@ -98,6 +98,7 @@
 use {
     crate::utils::{ShortCounter, Token, TokenCell},
     assert_matches::assert_matches,
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
     std::{collections::VecDeque, mem, sync::Arc},
@@ -413,7 +414,7 @@ const_assert_eq!(mem::size_of::<BlockedUsageCountToken>(), 0);
 /// Internal scheduling data about a particular task.
 #[derive(Debug)]
 pub struct TaskInner {
-    transaction: SanitizedTransaction,
+    transaction: RuntimeTransaction<SanitizedTransaction>,
     /// The index of a transaction in ledger entries; not used by SchedulingStateMachine by itself.
     /// Carrying this along with the transaction is needed to properly record the execution result
     /// of it.
@@ -427,7 +428,7 @@ impl TaskInner {
         self.index
     }
 
-    pub fn transaction(&self) -> &SanitizedTransaction {
+    pub fn transaction(&self) -> &RuntimeTransaction<SanitizedTransaction> {
         &self.transaction
     }
 
@@ -754,8 +755,8 @@ impl SchedulingStateMachine {
         }
     }
 
-    /// Creates a new task with [`SanitizedTransaction`] with all of its corresponding
-    /// [`UsageQueue`]s preloaded.
+    /// Creates a new task with [`RuntimeTransaction<SanitizedTransaction>`]
+    /// with all of its corresponding [`UsageQueue`]s preloaded.
     ///
     /// Closure (`usage_queue_loader`) is used to delegate the (possibly multi-threaded)
     /// implementation of [`UsageQueue`] look-up by [`pubkey`](Pubkey) to callers. It's the
@@ -768,7 +769,7 @@ impl SchedulingStateMachine {
     /// after created, if `has_no_active_task()` is `true`. Also note that this is desired for
     /// separation of concern.
     pub fn create_task(
-        transaction: SanitizedTransaction,
+        transaction: RuntimeTransaction<SanitizedTransaction>,
         index: usize,
         usage_queue_loader: &mut impl FnMut(Pubkey) -> UsageQueue,
     ) -> Task {
@@ -891,17 +892,19 @@ mod tests {
             signer::keypair::Keypair,
             transaction::{SanitizedTransaction, Transaction},
         },
-        std::{cell::RefCell, collections::HashMap, rc::Rc},
+        std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc},
     };
 
-    fn simplest_transaction() -> SanitizedTransaction {
+    fn simplest_transaction() -> RuntimeTransaction<SanitizedTransaction> {
         let payer = Keypair::new();
         let message = Message::new(&[], Some(&payer.pubkey()));
         let unsigned = Transaction::new_unsigned(message);
-        SanitizedTransaction::from_transaction_for_tests(unsigned)
+        RuntimeTransaction::from_transaction_for_tests(unsigned)
     }
 
-    fn transaction_with_readonly_address(address: Pubkey) -> SanitizedTransaction {
+    fn transaction_with_readonly_address(
+        address: Pubkey,
+    ) -> RuntimeTransaction<SanitizedTransaction> {
         let instruction = Instruction {
             program_id: Pubkey::default(),
             accounts: vec![AccountMeta::new_readonly(address, false)],
@@ -909,10 +912,12 @@ mod tests {
         };
         let message = Message::new(&[instruction], Some(&Pubkey::new_unique()));
         let unsigned = Transaction::new_unsigned(message);
-        SanitizedTransaction::from_transaction_for_tests(unsigned)
+        RuntimeTransaction::from_transaction_for_tests(unsigned)
     }
 
-    fn transaction_with_writable_address(address: Pubkey) -> SanitizedTransaction {
+    fn transaction_with_writable_address(
+        address: Pubkey,
+    ) -> RuntimeTransaction<SanitizedTransaction> {
         let instruction = Instruction {
             program_id: Pubkey::default(),
             accounts: vec![AccountMeta::new(address, false)],
@@ -920,7 +925,7 @@ mod tests {
         };
         let message = Message::new(&[instruction], Some(&Pubkey::new_unique()));
         let unsigned = Transaction::new_unsigned(message);
-        SanitizedTransaction::from_transaction_for_tests(unsigned)
+        RuntimeTransaction::from_transaction_for_tests(unsigned)
     }
 
     fn create_address_loader(
@@ -976,7 +981,7 @@ mod tests {
             UsageQueue::default()
         });
         assert_eq!(task.task_index(), 3);
-        assert_eq!(task.transaction(), &sanitized);
+        assert_eq!(task.transaction().deref(), sanitized.deref());
     }
 
     #[test]

@@ -11,6 +11,7 @@ use {
     solana_feature_set::FeatureSet,
     solana_measure::measure::Measure,
     solana_runtime::bank::Bank,
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         clock::Slot,
         saturating_add_assign,
@@ -42,7 +43,7 @@ impl QosService {
     pub fn select_and_accumulate_transaction_costs(
         &self,
         bank: &Bank,
-        transactions: &[SanitizedTransaction],
+        transactions: &[RuntimeTransaction<SanitizedTransaction>],
         pre_results: impl Iterator<Item = transaction::Result<()>>,
     ) -> (Vec<transaction::Result<TransactionCost>>, u64) {
         let transaction_costs =
@@ -69,7 +70,7 @@ impl QosService {
     fn compute_transaction_costs<'a>(
         &self,
         feature_set: &FeatureSet,
-        transactions: impl Iterator<Item = &'a SanitizedTransaction>,
+        transactions: impl Iterator<Item = &'a RuntimeTransaction<SanitizedTransaction>>,
         pre_results: impl Iterator<Item = transaction::Result<()>>,
     ) -> Vec<transaction::Result<TransactionCost>> {
         let mut compute_cost_time = Measure::start("compute_cost_time");
@@ -94,7 +95,7 @@ impl QosService {
     /// and a count of the number of transactions that would fit in the block
     fn select_transactions_per_cost<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a SanitizedTransaction>,
+        transactions: impl Iterator<Item = &'a RuntimeTransaction<SanitizedTransaction>>,
         transactions_costs: impl Iterator<Item = transaction::Result<TransactionCost>>,
         bank: &Bank,
     ) -> (Vec<transaction::Result<TransactionCost>>, usize) {
@@ -626,10 +627,10 @@ mod tests {
 
         // make a vec of txs
         let keypair = Keypair::new();
-        let transfer_tx = SanitizedTransaction::from_transaction_for_tests(
+        let transfer_tx = RuntimeTransaction::from_transaction_for_tests(
             system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default()),
         );
-        let vote_tx = SanitizedTransaction::from_transaction_for_tests(
+        let vote_tx = RuntimeTransaction::from_transaction_for_tests(
             vote_transaction::new_tower_sync_transaction(
                 TowerSync::from(vec![(42, 1)]),
                 Hash::default(),
@@ -669,10 +670,10 @@ mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
         let keypair = Keypair::new();
-        let transfer_tx = SanitizedTransaction::from_transaction_for_tests(
+        let transfer_tx = RuntimeTransaction::from_transaction_for_tests(
             system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default()),
         );
-        let vote_tx = SanitizedTransaction::from_transaction_for_tests(
+        let vote_tx = RuntimeTransaction::from_transaction_for_tests(
             vote_transaction::new_tower_sync_transaction(
                 TowerSync::from(vec![(42, 1)]),
                 Hash::default(),
@@ -688,7 +689,6 @@ mod tests {
 
         // make a vec of txs
         let txs = vec![transfer_tx.clone(), vote_tx.clone(), transfer_tx, vote_tx];
-
         let qos_service = QosService::new(1);
         let txs_costs = qos_service.compute_transaction_costs(
             &FeatureSet::all_enabled(),
@@ -731,10 +731,8 @@ mod tests {
             ],
             Some(&keypair.pubkey()),
         ));
-        let transfer_tx = SanitizedTransaction::from_transaction_for_tests(transaction.clone());
-        let txs: Vec<SanitizedTransaction> = (0..transaction_count)
-            .map(|_| transfer_tx.clone())
-            .collect();
+        let transfer_tx = RuntimeTransaction::from_transaction_for_tests(transaction.clone());
+        let txs = vec![transfer_tx; transaction_count as usize];
         let execute_units_adjustment: u64 = 10;
         let loaded_accounts_data_size_adjustment: u32 = 32000;
         let loaded_accounts_data_size_cost_adjustment =
@@ -801,12 +799,10 @@ mod tests {
         // calculate their costs, apply to cost_tracker
         let transaction_count = 5;
         let keypair = Keypair::new();
-        let transfer_tx = SanitizedTransaction::from_transaction_for_tests(
+        let transfer_tx = RuntimeTransaction::from_transaction_for_tests(
             system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default()),
         );
-        let txs: Vec<SanitizedTransaction> = (0..transaction_count)
-            .map(|_| transfer_tx.clone())
-            .collect();
+        let txs = vec![transfer_tx; transaction_count];
 
         // assert all tx_costs should be removed from cost_tracker if all execution_results are all Not Committed
         {
@@ -851,10 +847,8 @@ mod tests {
             ],
             Some(&keypair.pubkey()),
         ));
-        let transfer_tx = SanitizedTransaction::from_transaction_for_tests(transaction.clone());
-        let txs: Vec<SanitizedTransaction> = (0..transaction_count)
-            .map(|_| transfer_tx.clone())
-            .collect();
+        let transfer_tx = RuntimeTransaction::from_transaction_for_tests(transaction.clone());
+        let txs = vec![transfer_tx; transaction_count];
         let execute_units_adjustment: u64 = 10;
         let loaded_accounts_data_size_adjustment: u32 = 32000;
         let loaded_accounts_data_size_cost_adjustment =
