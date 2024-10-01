@@ -173,6 +173,14 @@ impl RuntimeTransaction<SanitizedTransaction> {
     }
 }
 
+#[cfg(feature = "dev-context-only-utils")]
+impl RuntimeTransaction<SanitizedTransaction> {
+    pub fn from_transaction_for_tests(transaction: solana_sdk::transaction::Transaction) -> Self {
+        let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(transaction);
+        Self::try_from_sanitized_transaction(sanitized_tx).unwrap()
+    }
+}
+
 impl<T: SVMMessage> SVMMessage for RuntimeTransaction<T> {
     // override to access from the cached meta instead of re-calculating
     fn num_total_signatures(&self) -> u64 {
